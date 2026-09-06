@@ -38,14 +38,17 @@ export function OperatorsContent() {
     }
   }
 
-  async function handleToggle(id: string, active: boolean) {
+  async function handleDelete(id: string, name: string) {
+    const confirmed = window.confirm(`Hapus ${name} dari daftar petugas presensi?`);
+    if (!confirmed) return;
+
     try {
-      const { data: resData } = await api.patch(`/operators/${id}`, { active: !active });
+      const { data: resData } = await api.delete(`/operators/${id}`);
       if (!resData.ok) {
-        showToast(resData.message ?? "Gagal memperbarui petugas.", "error");
+        showToast(resData.message ?? "Gagal menghapus petugas.", "error");
         return;
       }
-      showToast(active ? "Petugas dinonaktifkan." : "Petugas diaktifkan kembali.");
+      showToast("Petugas berhasil dihapus.");
       mutate();
     } catch (err: any) {
       showToast(err.response?.data?.message ?? "Gagal terhubung ke server.", "error");
@@ -100,7 +103,6 @@ export function OperatorsContent() {
                 <th className="px-4 py-3 font-semibold">NIS</th>
                 <th className="px-4 py-3 font-semibold">Nama</th>
                 <th className="px-4 py-3 font-semibold">Kelompok</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3 font-semibold text-right">Aksi</th>
               </tr>
             </thead>
@@ -117,21 +119,12 @@ export function OperatorsContent() {
                     )}
                   </td>
                   <td className="px-4 py-2 text-gray-600">{o.group_name}</td>
-                  <td className="px-4 py-2">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        o.active ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-500"
-                      }`}
-                    >
-                      {o.active ? "Aktif" : "Nonaktif"}
-                    </span>
-                  </td>
                   <td className="px-4 py-2 text-right">
                     <button
-                      onClick={() => handleToggle(o.id, o.active)}
-                      className="text-sm font-semibold text-ppm-green-dark"
+                      onClick={() => handleDelete(o.id, o.student_name)}
+                      className="text-sm font-semibold text-red-600 hover:text-red-800"
                     >
-                      {o.active ? "Nonaktifkan" : "Aktifkan"}
+                      Hapus
                     </button>
                   </td>
                 </tr>

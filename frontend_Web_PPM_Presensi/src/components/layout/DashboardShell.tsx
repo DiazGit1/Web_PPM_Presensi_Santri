@@ -1,6 +1,6 @@
 import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import api from "@/lib/axios";
+import { useAuth } from "@/contexts/AuthContext";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
@@ -31,15 +31,13 @@ function BrandMark() {
 
 export function DashboardShell() {
   const { pathname } = useLocation();
-  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   async function handleLogout() {
     setLoggingOut(true);
-    await api.post("/logout");
-    navigate("/dashboard");
-    window.location.reload();
+    await logout();
   }
 
   return (

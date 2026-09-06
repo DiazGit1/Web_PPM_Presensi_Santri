@@ -23,7 +23,7 @@ class AttendanceController extends Controller
         $isLatest = $request->query('latest') === 'true';
 
         $sessionsQuery = DB::table('attendance_sessions')
-            ->select('id as sessionId', 'session_date as date', 'session_type as type', 'scan_start_time');
+            ->select('id as sessionId', 'session_date as date', 'session_type as type', 'scan_start_time', 'end_time');
 
         if ($isLatest) {
             $sessionsQuery->orderBy('session_date', 'desc')
@@ -43,7 +43,7 @@ class AttendanceController extends Controller
         }
         
         $sessions = $sessionsQuery->get()->map(function($s) {
-            $s->label = $s->type === 'subuh' ? 'Subuh' : 'Malam';
+            $s->label = ucfirst($s->type);
             return $s;
         });
 
@@ -177,7 +177,7 @@ class AttendanceController extends Controller
                     'state' => 'active',
                     'sessionId' => $s->id,
                     'sessionType' => $s->session_type,
-                    'label' => $s->session_type === 'subuh' ? 'Subuh' : 'Malam',
+                    'label' => ucfirst($s->session_type),
                     'endTime' => $s->end_time
                 ]);
             }
@@ -194,7 +194,7 @@ class AttendanceController extends Controller
                 'ok' => true,
                 'state' => 'not_started',
                 'sessionType' => $upcoming->session_type,
-                'label' => $upcoming->session_type === 'subuh' ? 'Subuh' : 'Malam',
+                'label' => ucfirst($upcoming->session_type),
                 'scanStartTime' => $upcoming->scan_start_time
             ]);
         }

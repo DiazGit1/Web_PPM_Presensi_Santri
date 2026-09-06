@@ -79,67 +79,7 @@ export function RecapContent() {
     });
   }, [detailData]);
 
-  const flatData = useMemo(() => {
-    if (!detailData?.ok || !detailData.rows || !detailData.sessions) return [];
-    const list: any[] = [];
-    for (const row of detailData.rows) {
-      for (const session of detailData.sessions) {
-        const cellData = row.cells[session.sessionId];
-        if (cellData) {
-          list.push({
-            studentId: row.studentId,
-            name: row.name,
-            gender: row.gender,
-            className: row.className,
-            sessionId: session.sessionId,
-            sessionDate: session.date,
-            sessionType: session.type,
-            label: session.label,
-            status: cellData.status,
-            time: cellData.time,
-          });
-        }
-      }
-    }
-    list.sort((a, b) => {
-      if (a.sessionDate !== b.sessionDate) return b.sessionDate.localeCompare(a.sessionDate);
-      return a.name.localeCompare(b.name);
-    });
-    return list;
-  }, [detailData]);
-
-  const groupedData = useMemo(() => {
-    const groups = new Map<string, typeof flatData>();
-    for (const item of flatData) {
-      if (!groups.has(item.sessionId)) groups.set(item.sessionId, []);
-      groups.get(item.sessionId)!.push(item);
-    }
-    return Array.from(groups.entries()).map(([sessionId, items]) => {
-      const stats = {
-        hadir: items.filter(i => i.status === 'hadir').length,
-        terlambat: items.filter(i => i.status === 'terlambat').length,
-        izin: items.filter(i => i.status === 'izin').length,
-        sakit: items.filter(i => i.status === 'sakit').length,
-        alpa: items.filter(i => i.status === 'alpa').length,
-        total: items.length
-      };
-      
-      const scannedItems = items.filter(i => i.time !== '-');
-      const repTime = scannedItems.length > 0 ? scannedItems[0].time : 'Belum/Tidak ada scan';
-
-      return {
-        sessionId,
-        sessionDate: items[0].sessionDate,
-        label: items[0].label,
-        repTime,
-        items,
-        stats
-      };
-    });
-  }, [flatData]);
-
-  const [activeTab, setActiveTab] = useState<"sesi" | "santri">("sesi");
-  const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  // Remove flatData and groupedData entirely
 
   const [filterGender, setFilterGender] = useState("");
   const [filterClass, setFilterClass] = useState("");
@@ -153,9 +93,30 @@ export function RecapContent() {
     });
   }, [summaryByStudent, filterGender, filterClass]);
 
-  function applyFilterSesi() {
-    setApplied({ from, to, groupId });
-  }
+  const groupedSummary = useMemo(() => {
+    const classGroups = new Map<string, any[]>();
+    for (const row of filteredSummary) {
+      const className = row.className || "Tanpa Kelas";
+      if (!classGroups.has(className)) classGroups.set(className, []);
+      classGroups.get(className)!.push(row);
+    }
+    
+    const CLASS_ORDER: Record<string, number> = {
+      "Bacaan": 1,
+      "Lambatan": 2,
+      "Cepatan": 3,
+      "HB": 4
+    };
+    
+    return Array.from(classGroups.entries()).sort((a, b) => {
+      const orderA = CLASS_ORDER[a[0]] || 99;
+      const orderB = CLASS_ORDER[b[0]] || 99;
+      if (orderA !== orderB) return orderA - orderB;
+      return a[0].localeCompare(b[0]);
+    });
+  }, [filteredSummary]);
+
+  // Remove applyFilterSesi
 
   function applyFilterSantri() {
     setApplied({ from, to, groupId: "" });
@@ -216,222 +177,98 @@ export function RecapContent() {
         </Button>
       </div>
 
-      <div className="flex border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab("sesi")}
-          className={`px-6 py-3 text-sm font-bold transition-colors ${
-            activeTab === "sesi"
-              ? "border-b-2 border-ppm-green text-ppm-green"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          Rekap Per Sesi
-        </button>
-        <button
-          onClick={() => setActiveTab("santri")}
-          className={`px-6 py-3 text-sm font-bold transition-colors ${
-            activeTab === "santri"
-              ? "border-b-2 border-ppm-green text-ppm-green"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          Rekap Per Santri
-        </button>
-      </div>
+      <div className="flex flex-col gap-4">
+        <FilterBar>
+          <Field label="Dari Tanggal">
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </Field>
+          <Field label="Sampai Tanggal">
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </Field>
+          <Field label="Pilih Kelas">
+            <Select value={filterClass} onChange={(e) => setFilterClass(e.target.value)}>
+              <option value="">— Semua Kelas —</option>
+              {(ref?.classes ?? []).map((c: any) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Pilih Gender">
+            <Select value={filterGender} onChange={(e) => setFilterGender(e.target.value)}>
+              <option value="">— Semua Gender —</option>
+              <option value="L">Laki-laki</option>
+              <option value="P">Perempuan</option>
+            </Select>
+          </Field>
+          <Button variant="gold" onClick={applyFilterSantri}>
+            Terapkan Tanggal
+          </Button>
+        </FilterBar>
 
-      {activeTab === "sesi" && (
-        <div className="flex flex-col gap-4">
-          <FilterBar>
-            <Field label="Dari Tanggal">
-              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </Field>
-            <Field label="Sampai Tanggal">
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            </Field>
-            <Button variant="gold" onClick={applyFilterSesi}>
-              Filter Data
-            </Button>
-          </FilterBar>
-
+        <div>
           {isLoadingDetail && <LoadingState />}
-          {detailData && !detailData.ok && <ErrorState message="Gagal memuat detail presensi." />}
-          {detailData?.ok && groupedData.length === 0 && (
-            <EmptyState title="Tidak ada riwayat detail pada rentang ini" />
-          )}
-
-          {detailData?.ok && groupedData.map((group) => (
-            <Card key={group.sessionId} className="overflow-hidden shadow-sm transition-shadow hover:shadow-md border border-gray-200">
-              <div 
-                className="cursor-pointer bg-white transition-colors hover:bg-gray-50 p-5"
-                onClick={() => setExpandedSession(expandedSession === group.sessionId ? null : group.sessionId)}
-              >
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="font-display text-lg font-bold text-gray-800">
-                      {group.sessionDate.split("-").reverse().join("/")} &middot; Sesi {group.label}
-                    </h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Jam KBM: <span className="font-medium text-gray-700">{group.repTime}</span>
-                    </p>
+          {detailData && !detailData.ok && <ErrorState message="Gagal memuat rekap presensi." />}
+          {detailData?.ok && groupedSummary.length === 0 && <EmptyState title="Tidak ada data pada rentang ini" />}
+          
+          {detailData?.ok && groupedSummary.length > 0 && (
+            <div className="flex flex-col gap-6">
+              {groupedSummary.map(([className, classRows]) => (
+                <Card key={className} className="overflow-hidden">
+                  <div className="bg-ppm-green-dark px-5 py-3 text-white">
+                    <h3 className="font-display text-lg font-bold">{className}</h3>
                   </div>
-                  
-                  <div className="flex flex-wrap items-center gap-3 lg:gap-6 bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">
-                    <div className="text-center">
-                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Hadir</p>
-                      <p className="font-bold text-green-600 text-lg">{group.stats.hadir}</p>
-                    </div>
-                    <div className="w-px h-8 bg-gray-200 hidden sm:block"></div>
-                    <div className="text-center">
-                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Trlbt</p>
-                      <p className="font-bold text-yellow-600 text-lg">{group.stats.terlambat}</p>
-                    </div>
-                    <div className="w-px h-8 bg-gray-200 hidden sm:block"></div>
-                    <div className="text-center">
-                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Izin</p>
-                      <p className="font-bold text-blue-600 text-lg">{group.stats.izin}</p>
-                    </div>
-                    <div className="w-px h-8 bg-gray-200 hidden sm:block"></div>
-                    <div className="text-center">
-                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Sakit</p>
-                      <p className="font-bold text-purple-600 text-lg">{group.stats.sakit}</p>
-                    </div>
-                    <div className="w-px h-8 bg-gray-200 hidden sm:block"></div>
-                    <div className="text-center">
-                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Alpa</p>
-                      <p className="font-bold text-red-600 text-lg">{group.stats.alpa}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {expandedSession === group.sessionId && (
-                <div className="bg-gray-50/50 p-5 border-t border-gray-100">
-                  <div className="scroll-thin overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                  <div className="scroll-thin overflow-x-auto">
                     <table className="w-full min-w-[720px] text-left text-sm">
-                      <thead className="bg-gray-100 text-gray-600">
+                      <thead className="bg-ppm-green text-white">
                         <tr>
-                          <th className="px-4 py-3 font-semibold">Nama Santri</th>
+                          <th className="px-4 py-3 font-semibold">Nama</th>
+                          <th className="px-4 py-3 font-semibold">NIS</th>
                           <th className="px-4 py-3 font-semibold">Gender</th>
-                          <th className="px-4 py-3 font-semibold">Kelas</th>
-                          <th className="px-4 py-3 text-center font-semibold">Status</th>
-                          <th className="px-4 py-3 text-center font-semibold">Waktu Scan</th>
+                          <th className="px-4 py-3 font-semibold text-center">Hadir</th>
+                          <th className="px-4 py-3 font-semibold text-center">Terlambat</th>
+                          <th className="px-4 py-3 font-semibold text-center">Izin</th>
+                          <th className="px-4 py-3 font-semibold text-center">Sakit</th>
+                          <th className="px-4 py-3 font-semibold text-center">Alpa</th>
+                          <th className="px-4 py-3 font-semibold text-center">Persentase</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {group.items.map((item) => (
-                          <tr
-                            key={item.studentId}
-                            className="border-t border-gray-100 hover:bg-gray-50"
-                          >
-                            <td className="px-4 py-2 font-medium text-gray-700">{item.name}</td>
-                            <td className="px-4 py-2 text-gray-600">
-                              {item.gender === "L" ? "Laki-laki" : "Perempuan"}
-                            </td>
-                            <td className="px-4 py-2 text-gray-600">{item.className}</td>
+                        {classRows.map((r: any) => (
+                          <tr key={r.studentId} className="border-t border-ppm-border hover:bg-ppm-cream/40">
+                            <td className="px-4 py-2 font-medium text-gray-700">{r.name}</td>
+                            <td className="px-4 py-2 text-gray-500">{r.nis}</td>
+                            <td className="px-4 py-2 text-gray-600">{r.gender === "L" ? "Laki-laki" : "Perempuan"}</td>
                             <td className="px-4 py-2 text-center">
-                              <MatrixCell code={item.status} />
+                              <CountBadge value={r.hadir} colorKey="hadir" />
                             </td>
-                            <td className="px-4 py-2 text-center text-gray-500">
-                              {item.time !== "-" ? item.time : "-"}
+                            <td className="px-4 py-2 text-center">
+                              <CountBadge value={r.terlambat} colorKey="terlambat" />
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <CountBadge value={r.izin} colorKey="izin" />
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <CountBadge value={r.sakit} colorKey="sakit" />
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <CountBadge value={r.alpa} colorKey="alpa" />
+                            </td>
+                            <td className="px-4 py-2 text-center font-semibold text-gray-700">
+                              {r.percentage.toFixed(1)}%
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                </div>
-              )}
-            </Card>
-          ))}
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-
-      {activeTab === "santri" && (
-        <div className="flex flex-col gap-4">
-          <FilterBar>
-            <Field label="Dari Tanggal">
-              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </Field>
-            <Field label="Sampai Tanggal">
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            </Field>
-            <Field label="Pilih Kelas">
-              <Select value={filterClass} onChange={(e) => setFilterClass(e.target.value)}>
-                <option value="">— Semua Kelas —</option>
-                {(ref?.classes ?? []).map((c: any) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Pilih Gender">
-              <Select value={filterGender} onChange={(e) => setFilterGender(e.target.value)}>
-                <option value="">— Semua Gender —</option>
-                <option value="L">Laki-laki</option>
-                <option value="P">Perempuan</option>
-              </Select>
-            </Field>
-            <Button variant="gold" onClick={applyFilterSantri}>
-              Terapkan Tanggal
-            </Button>
-          </FilterBar>
-
-          <Card className="overflow-hidden">
-            {isLoadingDetail && <LoadingState />}
-            {detailData && !detailData.ok && <ErrorState message="Gagal memuat rekap presensi." />}
-            {detailData?.ok && filteredSummary.length === 0 && <EmptyState title="Tidak ada data pada rentang ini" />}
-            {detailData?.ok && filteredSummary.length > 0 && (
-              <div className="scroll-thin overflow-x-auto">
-                <table className="w-full min-w-[820px] text-left text-sm">
-                  <thead className="bg-ppm-green text-white">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold">Nama</th>
-                      <th className="px-4 py-3 font-semibold">NIS</th>
-                      <th className="px-4 py-3 font-semibold">Kelas</th>
-                      <th className="px-4 py-3 font-semibold">Gender</th>
-                      <th className="px-4 py-3 font-semibold text-center">Hadir</th>
-                      <th className="px-4 py-3 font-semibold text-center">Terlambat</th>
-                      <th className="px-4 py-3 font-semibold text-center">Izin</th>
-                      <th className="px-4 py-3 font-semibold text-center">Sakit</th>
-                      <th className="px-4 py-3 font-semibold text-center">Alpa</th>
-                      <th className="px-4 py-3 font-semibold text-center">Persentase</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredSummary.map((r: any) => (
-                      <tr key={r.studentId} className="border-t border-ppm-border hover:bg-ppm-cream/40">
-                        <td className="px-4 py-2 font-medium text-gray-700">{r.name}</td>
-                        <td className="px-4 py-2 text-gray-500">{r.nis}</td>
-                        <td className="px-4 py-2 text-gray-600">{r.className}</td>
-                        <td className="px-4 py-2 text-gray-600">{r.gender === "L" ? "Laki-laki" : "Perempuan"}</td>
-                        <td className="px-4 py-2 text-center">
-                          <CountBadge value={r.hadir} colorKey="hadir" />
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <CountBadge value={r.terlambat} colorKey="terlambat" />
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <CountBadge value={r.izin} colorKey="izin" />
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <CountBadge value={r.sakit} colorKey="sakit" />
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <CountBadge value={r.alpa} colorKey="alpa" />
-                        </td>
-                        <td className="px-4 py-2 text-center font-semibold text-gray-700">
-                          {r.percentage.toFixed(1)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

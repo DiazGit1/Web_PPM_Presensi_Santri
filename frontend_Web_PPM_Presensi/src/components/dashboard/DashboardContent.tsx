@@ -39,7 +39,7 @@ export function DashboardContent() {
 
           <div>
             <h2 className="mb-3 font-display text-lg font-bold text-gray-700">
-              Statistik Hari Ini
+              Statistik Hari Ini (Keseluruhan)
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               {STAT_LABELS.map((s) => (
@@ -52,6 +52,33 @@ export function DashboardContent() {
               ))}
             </div>
           </div>
+          
+          {data.statsByClass && Object.entries(data.statsByClass).length > 0 && (
+            <div className="mt-4">
+              <h2 className="mb-3 font-display text-lg font-bold text-gray-700">
+                Statistik Per Kelas
+              </h2>
+              <div className="flex flex-col gap-4">
+                {Object.entries(data.statsByClass).map(([className, classStats]: [string, any]) => (
+                  <Card key={className} className="p-4 border border-gray-100">
+                    <h3 className="mb-3 font-display font-bold text-gray-700 text-lg border-b border-gray-100 pb-2">
+                      {className}
+                    </h3>
+                    <div className="grid grid-cols-5 gap-2">
+                      {STAT_LABELS.map((s) => (
+                        <div key={s.key} className="flex flex-col items-center text-center">
+                          <p className={`font-display text-xl font-bold ${s.color}`}>
+                            {classStats?.[s.key] ?? 0}
+                          </p>
+                          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{s.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

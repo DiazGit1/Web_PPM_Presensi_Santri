@@ -83,4 +83,15 @@ class OperatorController extends Controller
             'ok' => true
         ]);
     }
+
+    public function destroy($id)
+    {
+        $op = AttendanceOperator::findOrFail($id);
+        $op->delete();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Petugas berhasil dihapus.'
+        ]);
+    }
 }

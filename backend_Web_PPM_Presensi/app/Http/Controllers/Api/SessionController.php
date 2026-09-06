@@ -99,6 +99,38 @@ class SessionController extends Controller
         return response()->json(['message' => 'Deleted']);
     }
 
+    public function update(Request $request, $id)
+    {
+        $session = AttendanceSession::find($id);
+        if (!$session) {
+            return response()->json(['message' => 'Sesi tidak ditemukan.'], 404);
+        }
+
+        $validated = $request->validate([
+            'sessionDate' => 'required|date',
+            'sessionType' => 'required|string',
+            'scanStartTime' => 'required',
+            'onTimeUntil' => 'required',
+            'endTime' => 'required',
+        ]);
+
+        // Basic format to H:i:s
+        $formatTime = function($time) {
+            if (strlen($time) === 5) return $time . ':00';
+            return $time;
+        };
+
+        $session->update([
+            'session_date' => $validated['sessionDate'],
+            'session_type' => $validated['sessionType'],
+            'scan_start_time' => $formatTime($validated['scanStartTime']),
+            'on_time_until' => $formatTime($validated['onTimeUntil']),
+            'end_time' => $formatTime($validated['endTime']),
+        ]);
+
+        return response()->json(['message' => 'Sesi berhasil diperbarui.', 'session' => $session]);
+    }
+
     public function toggleGroup(Request $request, $sessionId, $groupId)
     {
         $validated = $request->validate([
@@ -114,6 +146,9 @@ class SessionController extends Controller
         }
 
         $sg->closed_manually = $validated['action'] === 'close';
+        if ($validated['action'] === 'reopen') {
+            $sg->finalized = false;
+        }
         $sg->save();
 
         return response()->json(['message' => 'Status kelompok berhasil diubah.']);

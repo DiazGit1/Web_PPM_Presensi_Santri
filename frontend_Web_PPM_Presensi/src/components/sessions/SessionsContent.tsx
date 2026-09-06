@@ -26,6 +26,9 @@ export function SessionsContent() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [editSessionTarget, setEditSessionTarget] = useState<any | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
   const settingsByType = useMemo(() => {
     const map = new Map<string, any>();
     for (const s of ref?.sessionSettings ?? []) map.set(s.session_type, s);
@@ -105,6 +108,28 @@ export function SessionsContent() {
       mutate();
     } catch (err: any) {
       showToast(err.response?.data?.message ?? "Gagal terhubung ke server.", "error");
+    }
+  }
+
+  async function handleUpdateSession(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editSessionTarget) return;
+    setEditSubmitting(true);
+    try {
+      await api.put(`/sessions/${editSessionTarget.id}`, {
+        sessionDate: editSessionTarget.session_date,
+        sessionType: editSessionTarget.session_type,
+        scanStartTime: editSessionTarget.scan_start_time?.slice(0, 5),
+        onTimeUntil: editSessionTarget.on_time_until?.slice(0, 5),
+        endTime: editSessionTarget.end_time?.slice(0, 5),
+      });
+      showToast("Sesi berhasil diperbarui.");
+      setEditSessionTarget(null);
+      mutate();
+    } catch (err: any) {
+      showToast(err.response?.data?.message ?? "Gagal memperbarui sesi.", "error");
+    } finally {
+      setEditSubmitting(false);
     }
   }
 
@@ -217,50 +242,135 @@ export function SessionsContent() {
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2">
-                  {(s.session_groups ?? []).map((sg: any) => (
-                    <div
-                      key={sg.id}
-                      className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold ${
-                        sg.closed_manually
-                          ? "border-red-200 bg-red-50 text-red-600"
-                          : "border-ppm-border bg-ppm-cream text-gray-600"
-                      }`}
-                    >
-                      {sg.group?.name}
-                      {sg.finalized && (
-                        <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600">
-                          selesai
-                        </span>
-                      )}
-                      {!sg.finalized && (
-                        <button
-                          onClick={() =>
-                            handleToggleGroup(
-                              s.id,
-                              sg.group?.id,
-                              sg.closed_manually ? "reopen" : "close"
-                            )
-                          }
-                          className="ml-1 underline decoration-dotted"
-                        >
-                          {sg.closed_manually ? "Buka lagi" : "Tutup"}
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                  {(s.session_groups ?? []).map((sg: any) => {
+                    const isEnded = s.session_date && s.end_time 
+                      ? new Date(`${s.session_date}T${s.end_time}+07:00`) < new Date() 
+                      : false;
+                      
+                    return (
+                      <div
+                        key={sg.id}
+                        className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                          !isEnded && (sg.closed_manually || sg.finalized)
+                            ? "border-red-200 bg-red-50 text-red-600"
+                            : "border-ppm-border bg-ppm-cream text-gray-600"
+                        }`}
+                      >
+                        {sg.group?.name}
+                        {!isEnded && (
+                          <button
+                            onClick={() =>
+                              handleToggleGroup(
+                                s.id,
+                                sg.group?.id,
+                                sg.closed_manually || sg.finalized ? "reopen" : "close"
+                              )
+                            }
+                            className="ml-1 underline decoration-dotted"
+                          >
+                            {sg.closed_manually || sg.finalized ? "Buka lagi" : "Tutup"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
-                <button
-                  onClick={() => handleDeleteSession(s.id)}
-                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100"
-                >
-                  Hapus
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEditSessionTarget(s)}
+                    className="rounded-lg border border-ppm-border bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-100"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteSession(s.id)}
+                    className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100"
+                  >
+                    Hapus
+                  </button>
+                </div>
               </div>
             </Card>
           ))}
         </div>
       </div>
+
+      {editSessionTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="mb-4 font-display text-xl font-bold text-gray-800">
+              Edit Pengaturan Sesi
+            </h3>
+            <form onSubmit={handleUpdateSession} className="flex flex-col gap-4">
+              <Field label="Tanggal Sesi">
+                <Input
+                  type="date"
+                  value={editSessionTarget.session_date}
+                  onChange={(e) =>
+                    setEditSessionTarget({ ...editSessionTarget, session_date: e.target.value })
+                  }
+                  required
+                />
+              </Field>
+              <Field label="Jenis Sesi">
+                <Select
+                  value={editSessionTarget.session_type}
+                  onChange={(e) =>
+                    setEditSessionTarget({ ...editSessionTarget, session_type: e.target.value })
+                  }
+                >
+                  <option value="subuh">Subuh</option>
+                  <option value="pagi">Pagi</option>
+                  <option value="siang">Siang</option>
+                  <option value="malam">Malam</option>
+                  <option value="lainnya">Lainnya</option>
+                </Select>
+              </Field>
+              <div className="grid grid-cols-3 gap-2">
+                <Field label="Mulai">
+                  <Input
+                    type="time"
+                    value={editSessionTarget.scan_start_time?.slice(0, 5) || ""}
+                    onChange={(e) =>
+                      setEditSessionTarget({ ...editSessionTarget, scan_start_time: e.target.value })
+                    }
+                    required
+                  />
+                </Field>
+                <Field label="Batas Waktu">
+                  <Input
+                    type="time"
+                    value={editSessionTarget.on_time_until?.slice(0, 5) || ""}
+                    onChange={(e) =>
+                      setEditSessionTarget({ ...editSessionTarget, on_time_until: e.target.value })
+                    }
+                    required
+                  />
+                </Field>
+                <Field label="Selesai">
+                  <Input
+                    type="time"
+                    value={editSessionTarget.end_time?.slice(0, 5) || ""}
+                    onChange={(e) =>
+                      setEditSessionTarget({ ...editSessionTarget, end_time: e.target.value })
+                    }
+                    required
+                  />
+                </Field>
+              </div>
+              <div className="mt-4 flex justify-end gap-3">
+                <Button type="button" variant="ghost" onClick={() => setEditSessionTarget(null)}>
+                  Batal
+                </Button>
+                <Button type="submit" disabled={editSubmitting}>
+                  {editSubmitting ? "Menyimpan..." : "Simpan Perubahan"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

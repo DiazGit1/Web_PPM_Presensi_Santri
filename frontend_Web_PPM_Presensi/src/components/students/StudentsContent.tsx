@@ -24,6 +24,29 @@ export function StudentsContent() {
 
   const { data: students, isLoading, error: fetchError, mutate } = useSWR(`/students?${queryString}`);
 
+  const groupedStudents = useMemo(() => {
+    if (!students) return [];
+    const groups = new Map<string, any[]>();
+    for (const s of students) {
+      const className = s.school_class?.name || s.class_name || "Tanpa Kelas";
+      if (!groups.has(className)) groups.set(className, []);
+      groups.get(className)!.push(s);
+    }
+    const CLASS_ORDER: Record<string, number> = {
+      "Bacaan": 1,
+      "Lambatan": 2,
+      "Cepatan": 3,
+      "HB": 4
+    };
+
+    return Array.from(groups.entries()).sort((a, b) => {
+      const orderA = CLASS_ORDER[a[0]] || 99;
+      const orderB = CLASS_ORDER[b[0]] || 99;
+      if (orderA !== orderB) return orderA - orderB;
+      return a[0].localeCompare(b[0]);
+    });
+  }, [students]);
+
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -155,47 +178,59 @@ export function StudentsContent() {
         </Field>
       </FilterBar>
 
-      <Card className="overflow-hidden">
-        {isLoading && <LoadingState />}
-        {fetchError && <ErrorState message="Gagal memuat data santri." />}
-        {!isLoading && !fetchError && students?.length === 0 && (
-          <EmptyState title="Tidak ada santri ditemukan" />
-        )}
-        {!isLoading && !fetchError && students?.length > 0 && (
-          <div className="scroll-thin overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="bg-ppm-green text-white">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">NIS</th>
-                  <th className="px-4 py-3 font-semibold">Nama</th>
-                  <th className="px-4 py-3 font-semibold">Kelas</th>
-                  <th className="px-4 py-3 font-semibold">Gender</th>
-                  <th className="px-4 py-3 font-semibold">Angkatan</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold text-right">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((s: any) => (
-                  <StudentRow
-                    key={s.id}
-                    student={s}
-                    classes={ref?.classes ?? []}
-                    editing={editingId === s.id}
-                    onEdit={() => setEditingId(s.id)}
-                    onCancelEdit={() => setEditingId(null)}
-                    onSaved={() => {
-                      setEditingId(null);
-                      mutate();
-                    }}
-                    onDeleted={() => mutate()}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+      {(isLoading || fetchError || students?.length === 0) && (
+        <Card className="overflow-hidden">
+          {isLoading && <LoadingState />}
+          {fetchError && <ErrorState message="Gagal memuat data santri." />}
+          {!isLoading && !fetchError && students?.length === 0 && (
+            <EmptyState title="Tidak ada santri ditemukan" />
+          )}
+        </Card>
+      )}
+
+      {!isLoading && !fetchError && groupedStudents.length > 0 && (
+        <div className="flex flex-col gap-6">
+          {groupedStudents.map(([className, classStudents]) => (
+            <Card key={className} className="overflow-hidden">
+              <div className="bg-ppm-green-dark px-5 py-3 text-white">
+                <h3 className="font-display text-lg font-bold">{className}</h3>
+              </div>
+              <div className="scroll-thin overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="bg-ppm-green text-white">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">NIS</th>
+                      <th className="px-4 py-3 font-semibold">Nama</th>
+                      <th className="px-4 py-3 font-semibold">Kelas</th>
+                      <th className="px-4 py-3 font-semibold">Gender</th>
+                      <th className="px-4 py-3 font-semibold">Angkatan</th>
+                      <th className="px-4 py-3 font-semibold">Status</th>
+                      <th className="px-4 py-3 font-semibold text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {classStudents.map((s: any) => (
+                      <StudentRow
+                        key={s.id}
+                        student={s}
+                        classes={ref?.classes ?? []}
+                        editing={editingId === s.id}
+                        onEdit={() => setEditingId(s.id)}
+                        onCancelEdit={() => setEditingId(null)}
+                        onSaved={() => {
+                          setEditingId(null);
+                          mutate();
+                        }}
+                        onDeleted={() => mutate()}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

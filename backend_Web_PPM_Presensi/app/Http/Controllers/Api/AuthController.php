@@ -12,8 +12,8 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'username' => 'required',
-            'password' => 'required',
+            'username' => 'required|string',
+            'password' => 'required|string',
         ]);
 
         // Using simple admin check from .env for migration simplicity,
@@ -21,9 +21,9 @@ class AuthController extends Controller
         $user = User::where('email', $request->username)->orWhere('name', $request->username)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
-            // Fallback to .env admin
-            if ($request->username === env('ADMIN_USERNAME') && $request->password === env('ADMIN_PASSWORD')) {
-                $user = User::firstOrCreate(
+            // Fallback to config admin
+            if ($request->username === config('app.admin_username') && $request->password === config('app.admin_password')) {
+                $user = User::updateOrCreate(
                     ['email' => 'admin@admin.com'],
                     ['name' => 'Admin', 'password' => Hash::make($request->password)]
                 );

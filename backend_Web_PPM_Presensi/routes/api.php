@@ -24,7 +24,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('sessions', SessionController::class);
     Route::post('sessions/{sessionId}/groups/{groupId}/toggle', [SessionController::class, 'toggleGroup']);
     
-    Route::apiResource('operators', \App\Http\Controllers\Api\OperatorController::class)->only(['index', 'store', 'update']);
+    Route::apiResource('operators', \App\Http\Controllers\Api\OperatorController::class)->only(['index', 'store', 'update', 'destroy']);
     
     Route::get('/attendance', [AttendanceController::class, 'index']);
     Route::post('/attendance/edit-status', [AttendanceController::class, 'editStatus']);

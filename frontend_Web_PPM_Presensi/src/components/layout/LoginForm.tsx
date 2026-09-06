@@ -27,7 +27,11 @@ export function LoginForm() {
       login(data.token, data.user);
       navigate("/dashboard");
     } catch (err: any) {
-      if (err.response?.data?.message) {
+      if (err.response?.data?.errors) {
+        // Extract the first validation error
+        const firstError = Object.values(err.response.data.errors)[0] as string[];
+        setError(firstError[0]);
+      } else if (err.response?.data?.message) {
         setError(err.response.data.message);
       } else {
         setError("Gagal terhubung ke server. Periksa koneksi internet dan coba lagi.");
