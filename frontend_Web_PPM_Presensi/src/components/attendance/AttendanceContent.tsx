@@ -1,8 +1,7 @@
 import useSWR from "swr";
 import { useState, useMemo } from "react";
-import { Card, Field, Input, Select, Button, FilterBar } from "@/components/ui/Basics";
-import { LoadingState, ErrorState, EmptyState } from "@/components/ui/States";
-import { MatrixCell } from "@/components/ui/StatusBadge";
+import { Card, Field, Input, Select, Button } from "@/components/ui/Basics";
+import { LoadingState, ErrorState } from "@/components/ui/States";
 import { useToast } from "@/components/ui/Toast";
 import type { AttendanceStatus } from "@/types/domain";
 import api from "@/lib/axios";
@@ -45,7 +44,6 @@ export function AttendanceContent() {
   const [searchName, setSearchName] = useState("");
   const [filterGender, setFilterGender] = useState("");
   const [filterClass, setFilterClass] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
 
   const groupedClasses = useMemo(() => {
     if (!data?.ok || !data.rows) return [];

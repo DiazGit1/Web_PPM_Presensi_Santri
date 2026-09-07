@@ -23,7 +23,7 @@ class DashboardController extends Controller
         if ($activeSession) {
             $activeSessionLabel = 'Sesi ' . ucfirst($activeSession->session_type);
             // Assuming session_date is cast to Carbon in model, otherwise parse it
-            $parsedDate = \Carbon\Carbon::parse($activeSession->session_date);
+            $parsedDate = Carbon::parse($activeSession->session_date);
             $activeSessionLabel .= ', ' . $parsedDate->translatedFormat('d F Y');
         }
 
