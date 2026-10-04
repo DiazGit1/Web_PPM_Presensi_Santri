@@ -43,7 +43,7 @@ export function DashboardShell() {
   return (
     <div className="flex min-h-screen w-full">
       {/* Sidebar desktop */}
-      <aside className="hidden w-64 flex-col border-r border-ppm-border bg-white p-5 lg:flex">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-ppm-border bg-white p-5 lg:flex">
         <BrandMark />
         <nav className="mt-8 flex flex-1 flex-col gap-1">
           {NAV_ITEMS.map((item) => {
@@ -72,7 +72,7 @@ export function DashboardShell() {
         </button>
       </aside>
 
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen flex-1 flex-col lg:pl-64">
         {/* Header mobile */}
         <header className="flex items-center justify-between border-b border-ppm-border bg-white px-4 py-3 lg:hidden">
           <BrandMark />

@@ -7,6 +7,9 @@ use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\SessionController;
 use App\Http\Controllers\Api\AttendanceController;
 
+Route::get('/login', function () {
+    return response()->json(['message' => 'Unauthenticated.'], 401);
+})->name('login');
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::get('/attendance/scanner-state', [AttendanceController::class, 'getScannerState']);

@@ -2,7 +2,6 @@ import useSWR from "swr";
 import { useState, useMemo } from "react";
 import { Card, Field, Input, Select, Button, FilterBar } from "@/components/ui/Basics";
 import { LoadingState, ErrorState, EmptyState } from "@/components/ui/States";
-import api from "@/lib/axios";
 
 function todayWIBString() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date());
@@ -21,7 +20,6 @@ const COUNT_BADGE: Record<string, string> = {
   alpa: "bg-[var(--status-alpa)]",
 };
 
-import { MatrixCell } from "@/components/ui/StatusBadge";
 import * as XLSX from "xlsx";
 
 export function RecapContent() {
@@ -29,7 +27,6 @@ export function RecapContent() {
 
   const [from, setFrom] = useState(daysAgoWIBString(29));
   const [to, setTo] = useState(todayWIBString());
-  const [groupId, setGroupId] = useState("");
   const [applied, setApplied] = useState({ from: daysAgoWIBString(29), to: todayWIBString(), groupId: "" });
 
   const { data: detailData, isLoading: isLoadingDetail } = useSWR(
@@ -69,11 +66,13 @@ export function RecapContent() {
         nis: row.nis,
         className: row.className,
         gender: row.gender,
+        active: row.active,
         hadir,
         terlambat,
         izin,
         sakit,
         alpa,
+        kbm: hadir + terlambat + izin + sakit + alpa,
         percentage
       };
     });
@@ -133,6 +132,7 @@ export function RecapContent() {
       "NIS": r.nis,
       "Kelas": r.className,
       "Gender": r.gender === 'L' ? 'Laki-laki' : 'Perempuan',
+      "KBM": r.kbm,
       "Hadir": r.hadir,
       "Terlambat": r.terlambat,
       "Izin": r.izin,
@@ -149,6 +149,7 @@ export function RecapContent() {
       { wch: 15 }, // NIS
       { wch: 15 }, // Kelas
       { wch: 12 }, // Gender
+      { wch: 8 },  // KBM
       { wch: 8 },  // Hadir
       { wch: 10 }, // Terlambat
       { wch: 8 },  // Izin
@@ -226,6 +227,7 @@ export function RecapContent() {
                           <th className="px-4 py-3 font-semibold">Nama</th>
                           <th className="px-4 py-3 font-semibold">NIS</th>
                           <th className="px-4 py-3 font-semibold">Gender</th>
+                          <th className="px-4 py-3 font-semibold text-center">KBM</th>
                           <th className="px-4 py-3 font-semibold text-center">Hadir</th>
                           <th className="px-4 py-3 font-semibold text-center">Terlambat</th>
                           <th className="px-4 py-3 font-semibold text-center">Izin</th>
@@ -236,10 +238,15 @@ export function RecapContent() {
                       </thead>
                       <tbody>
                         {classRows.map((r: any) => (
-                          <tr key={r.studentId} className="border-t border-ppm-border hover:bg-ppm-cream/40">
-                            <td className="px-4 py-2 font-medium text-gray-700">{r.name}</td>
+                          <tr key={r.studentId} className={`border-t border-ppm-border ${!r.active ? 'bg-gray-100 opacity-60' : 'hover:bg-ppm-cream/40'}`}>
+                            <td className="px-4 py-2 font-medium text-gray-700">
+                              {r.name}
+                            </td>
                             <td className="px-4 py-2 text-gray-500">{r.nis}</td>
                             <td className="px-4 py-2 text-gray-600">{r.gender === "L" ? "Laki-laki" : "Perempuan"}</td>
+                            <td className="px-4 py-2 text-center">
+                              <span className="font-bold text-gray-700">{r.kbm}</span>
+                            </td>
                             <td className="px-4 py-2 text-center">
                               <CountBadge value={r.hadir} colorKey="hadir" />
                             </td>

@@ -63,7 +63,7 @@ class AttendanceController extends Controller
             ->whereIn('session_id', $sessionIds)
             ->get();
 
-        $studentsQuery = Student::with('schoolClass')->where('active', true);
+        $studentsQuery = Student::with('schoolClass');
         if ($groupId) {
             $group = \App\Models\Group::find($groupId);
             if ($group) {
@@ -73,39 +73,150 @@ class AttendanceController extends Controller
         }
         $students = $studentsQuery->orderBy('name')->get();
 
+        $rows = $this->buildAttendanceRows($students, $sessions, $records, $sessionGroups);
+
+        return response()->json([
+            'ok' => true,
+            'sessions' => $sessions,
+            'rows' => $rows
+        ]);
+    }
+
+    private function buildAttendanceRows($students, $sessions, $records, $sessionGroups): array
+    {
         $groups = \App\Models\Group::all();
-        $getGroupId = function($student) use ($groups) {
-            $g = $groups->where('class_id', $student->class_id)->where('gender', $student->gender)->first();
-            return $g ? $g->id : null;
-        };
+        $groupMap = [];
+        foreach ($groups as $g) {
+            $groupMap[$g->class_id . '_' . $g->gender] = $g->id;
+        }
+
+        $recordMap = [];
+        foreach ($records as $r) {
+            $recordMap[$r->student_id . '_' . $r->session_id] = $r;
+        }
+
+        $sgMap = [];
+        foreach ($sessionGroups as $sg) {
+            $sgMap[$sg->session_id . '_' . $sg->group_id] = $sg;
+        }
+
+        $allHistories = StudentClassHistory::whereIn('student_id', $students->pluck('id'))->get();
+        $historyByStudent = [];
+        foreach ($allHistories as $h) {
+            $historyByStudent[$h->student_id][] = $h;
+        }
 
         $rows = [];
         foreach ($students as $student) {
             $cells = [];
             $hasAnyData = false;
-            $sGroupId = $getGroupId($student);
+            
+            $rawHistories = $historyByStudent[$student->id] ?? [];
+            $studentHistories = collect($rawHistories);
+
+            $enrollmentStart = null;
+            if ($studentHistories->isNotEmpty()) {
+                $sortedHistories = $studentHistories->sortBy('effective_from')->values();
+                foreach ($sortedHistories as $idx => $h) {
+                    if ($idx === 0) {
+                        $enrollmentStart = $h->effective_from;
+                    } else {
+                        $prev = $sortedHistories[$idx - 1];
+                        if ($prev->effective_to) {
+                            $prevEnd = Carbon::parse($prev->effective_to);
+                            $currStart = Carbon::parse($h->effective_from);
+                            if ($prevEnd->diffInDays($currStart) > 1) {
+                                $enrollmentStart = $h->effective_from;
+                            }
+                        } else {
+                            $enrollmentStart = $h->effective_from;
+                        }
+                    }
+                }
+            }
+
+            $historiesDesc = $studentHistories->sortByDesc('effective_from')->values()->all();
 
             foreach ($sessions as $session) {
-                $sg = $sessionGroups->where('session_id', $session->sessionId)
-                                    ->where('group_id', $sGroupId)
-                                    ->first();
-                if ($sg) {
-                    $record = $records->where('student_id', $student->id)->where('session_id', $session->sessionId)->first();
-                    if ($record) {
-                        $time = $record->scanned_at ?? $record->created_at;
-                        $cells[$session->sessionId] = [
-                            'status' => $record->status,
-                            'time' => $time ? \Carbon\Carbon::parse($time)->format('H:i') : '-'
-                        ];
-                    } else {
+                $sessionDateStr = $session->date;
+
+                if ($enrollmentStart && $sessionDateStr < $enrollmentStart) {
+                    $cells[$session->sessionId] = null;
+                    $hasAnyData = true;
+                    continue;
+                }
+
+                $history = null;
+                foreach ($historiesDesc as $h) {
+                    if ($h->effective_from <= $sessionDateStr && (is_null($h->effective_to) || $h->effective_to >= $sessionDateStr)) {
+                        
+                        // Failsafe: Jika riwayat baru dibuat (diaktifkan) SETELAH sesi berakhir, berarti dia belum aktif di sesi tersebut.
+                        if (isset($session->end_time) && $h->created_at) {
+                            $sessionEndInstant = Carbon::parse($sessionDateStr . ' ' . $session->end_time);
+                            if ($h->created_at->gt($sessionEndInstant)) {
+                                continue;
+                            }
+                        }
+
+                        // Failsafe: Jika riwayat ditutup (dinonaktifkan) SEBELUM sesi dimulai, berarti dia sudah tidak aktif di sesi tersebut.
+                        if (!is_null($h->effective_to) && $h->effective_to === $sessionDateStr) {
+                            if (isset($session->scan_start_time) && $h->updated_at) {
+                                $sessionStartInstant = Carbon::parse($sessionDateStr . ' ' . $session->scan_start_time);
+                                if ($h->updated_at->lt($sessionStartInstant)) {
+                                    continue;
+                                }
+                            }
+                        }
+
+                        $history = $h;
+                        break;
+                    }
+                }
+
+                $classId = null;
+                $gender = null;
+
+                if ($history) {
+                    $classId = $history->class_id;
+                    $gender = $history->gender;
+                } else if (empty($historiesDesc)) {
+                    if ($student->active) {
+                        $createdDate = $student->created_at ? $student->created_at->toDateString() : '2000-01-01';
+                        if ($sessionDateStr >= $createdDate) {
+                            $classId = $student->class_id;
+                            $gender = $student->gender;
+                        }
+                    }
+                }
+
+                $sGroupId = null;
+                if ($classId && $gender) {
+                    $sGroupId = $groupMap[$classId . '_' . $gender] ?? null;
+                }
+
+                $record = $recordMap[$student->id . '_' . $session->sessionId] ?? null;
+
+                if ($record) {
+                    $time = $record->scanned_at ?? $record->created_at;
+                    $cells[$session->sessionId] = [
+                        'status' => $record->status,
+                        'time' => $time ? Carbon::parse($time)->format('H:i') : '-'
+                    ];
+                    $hasAnyData = true;
+                } else if ($sGroupId) {
+                    $sg = $sgMap[$session->sessionId . '_' . $sGroupId] ?? null;
+                    if ($sg) {
                         $cells[$session->sessionId] = [
                             'status' => 'alpa',
                             'time' => '-'
                         ];
+                        $hasAnyData = true;
+                    } else {
+                        $cells[$session->sessionId] = null;
                     }
-                    $hasAnyData = true;
                 } else {
                     $cells[$session->sessionId] = null;
+                    $hasAnyData = true;
                 }
             }
 
@@ -116,16 +227,13 @@ class AttendanceController extends Controller
                     'nis' => $student->nis,
                     'gender' => $student->gender,
                     'className' => $student->schoolClass ? $student->schoolClass->name : '-',
+                    'active' => (bool)$student->active,
                     'cells' => (object)$cells
                 ];
             }
         }
 
-        return response()->json([
-            'ok' => true,
-            'sessions' => $sessions,
-            'rows' => $rows
-        ]);
+        return $rows;
     }
 
     private function getStudentGroupOnDate($studentId, $dateStr)
@@ -234,26 +342,74 @@ class AttendanceController extends Controller
         $candidates = DB::table('session_groups as sg')
             ->join('attendance_sessions as s', 'sg.session_id', '=', 's.id')
             ->join('groups as g', 'sg.group_id', '=', 'g.id')
-            ->select('sg.id', 'sg.session_id', 'sg.group_id', 's.session_date', 's.end_time', 'g.class_id', 'g.gender', 'g.name as group_name')
+            ->select('sg.id', 'sg.session_id', 'sg.group_id', 's.session_date', 's.scan_start_time', 's.end_time', 'g.class_id', 'g.gender', 'g.name as group_name')
             ->where('sg.finalized', 0)
             ->where('sg.opened', 1)
             ->get();
+
+        if ($candidates->isEmpty()) return;
+
+        $activeStudents = Student::where('active', 1)->get();
+        $studentIds = $activeStudents->pluck('id');
+        
+        $allHistories = StudentClassHistory::with('schoolClass')
+            ->whereIn('student_id', $studentIds)
+            ->orderBy('effective_from', 'desc')
+            ->get()
+            ->groupBy('student_id');
+            
+        $groups = \App\Models\Group::all();
+        $groupMap = [];
+        foreach ($groups as $g) {
+            $groupMap[$g->class_id . '_' . $g->gender] = $g->id;
+        }
 
         foreach ($candidates as $row) {
             $endInstant = Carbon::parse($row->session_date . ' ' . $row->end_time);
             if ($now->lt($endInstant)) continue;
 
-            $activeStudents = Student::where('active', 1)->get();
             $recordedStudentIds = AttendanceRecord::where('session_id', $row->session_id)
                 ->pluck('student_id')
                 ->toArray();
+                
+            $recordedSet = array_flip($recordedStudentIds);
 
             $alpaData = [];
             foreach ($activeStudents as $s) {
-                if (in_array($s->id, $recordedStudentIds)) continue;
+                if (isset($recordedSet[$s->id])) continue;
 
-                $group = $this->getStudentGroupOnDate($s->id, $row->session_date);
-                if (!$group || $group['groupId'] !== $row->group_id) continue;
+                $studentHistories = $allHistories->get($s->id);
+                if (!$studentHistories) continue;
+                
+                $history = null;
+                foreach ($studentHistories as $h) {
+                    if ($h->effective_from <= $row->session_date && (is_null($h->effective_to) || $h->effective_to >= $row->session_date)) {
+                        
+                        if (isset($row->end_time) && $h->created_at) {
+                            $sessionEndInstant = Carbon::parse($row->session_date . ' ' . $row->end_time);
+                            if ($h->created_at->gt($sessionEndInstant)) {
+                                continue;
+                            }
+                        }
+
+                        if (!is_null($h->effective_to) && $h->effective_to === $row->session_date) {
+                            if (isset($row->scan_start_time) && $h->updated_at) {
+                                $sessionStartInstant = Carbon::parse($row->session_date . ' ' . $row->scan_start_time);
+                                if ($h->updated_at->lt($sessionStartInstant)) {
+                                    continue;
+                                }
+                            }
+                        }
+
+                        $history = $h;
+                        break;
+                    }
+                }
+                
+                if (!$history) continue;
+                
+                $sGroupId = $groupMap[$history->class_id . '_' . $history->gender] ?? null;
+                if ($sGroupId !== $row->group_id) continue;
 
                 $alpaData[] = [
                     'id' => \Illuminate\Support\Str::uuid()->toString(),

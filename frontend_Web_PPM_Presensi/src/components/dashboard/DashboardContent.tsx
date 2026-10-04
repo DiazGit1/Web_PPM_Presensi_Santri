@@ -39,7 +39,7 @@ export function DashboardContent() {
 
           <div>
             <h2 className="mb-3 font-display text-lg font-bold text-gray-700">
-              Statistik Hari Ini (Keseluruhan)
+              Statistik Keseluruhan
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               {STAT_LABELS.map((s) => (
@@ -52,7 +52,7 @@ export function DashboardContent() {
               ))}
             </div>
           </div>
-          
+
           {data.statsByClass && Object.entries(data.statsByClass).length > 0 && (
             <div className="mt-4">
               <h2 className="mb-3 font-display text-lg font-bold text-gray-700">

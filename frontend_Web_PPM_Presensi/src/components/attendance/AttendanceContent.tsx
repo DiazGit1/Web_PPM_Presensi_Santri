@@ -24,9 +24,9 @@ export function AttendanceContent() {
   const { showToast } = useToast();
   const { data: ref } = useSWR("/reference");
 
-  const [fromDate, setFromDate] = useState(getPastDate(7));
+  const [fromDate, setFromDate] = useState(getPastDate(29));
   const [toDate, setToDate] = useState(getPastDate(0));
-  const [appliedQuery, setAppliedQuery] = useState({ from: getPastDate(7), to: getPastDate(0) });
+  const [appliedQuery, setAppliedQuery] = useState({ from: getPastDate(29), to: getPastDate(0) });
 
   const { data, isLoading, mutate } = useSWR(
     `/attendance?from=${appliedQuery.from}&to=${appliedQuery.to}`
@@ -93,6 +93,29 @@ export function AttendanceContent() {
   async function handleChangeStatus(status: AttendanceStatus) {
     if (!editTarget) return;
     setSavingStatus(true);
+    
+    // Optimistic update
+    const previousData = data;
+    mutate((currentData: any) => {
+      if (!currentData || !currentData.rows) return currentData;
+      const newRows = currentData.rows.map((r: any) => {
+        if (r.studentId === editTarget.studentId) {
+          return {
+            ...r,
+            cells: {
+              ...r.cells,
+              [editTarget.sessionId]: {
+                ...r.cells[editTarget.sessionId],
+                status: status
+              }
+            }
+          };
+        }
+        return r;
+      });
+      return { ...currentData, rows: newRows };
+    }, false); // update cache immediately without revalidating just yet
+
     try {
       const { data: resData } = await api.post("/attendance/edit-status", {
         sessionId: editTarget.sessionId,
@@ -101,13 +124,15 @@ export function AttendanceContent() {
       });
       if (!resData.ok) {
         showToast(resData.message ?? "Gagal memperbarui status.", "error");
+        mutate(previousData); // rollback
         return;
       }
       showToast("Status presensi diperbarui.");
       setEditTarget(null);
-      mutate();
+      mutate(); // revalidate in background to ensure consistency
     } catch (err: any) {
       showToast(err.response?.data?.message ?? "Gagal terhubung ke server.", "error");
+      mutate(previousData); // rollback
     } finally {
       setSavingStatus(false);
     }
@@ -205,7 +230,7 @@ export function AttendanceContent() {
                 </thead>
                 <tbody>
                   {classRows.map((row: any) => (
-                    <tr key={row.studentId} className="border-b border-gray-200 hover:bg-gray-50">
+                    <tr key={row.studentId} className={`border-b border-gray-200 ${!row.active ? 'bg-gray-100 opacity-70' : 'hover:bg-gray-50'}`}>
                       <td className="px-4 py-2 font-medium text-gray-800 text-left border-r border-gray-200 truncate max-w-[200px]">
                         {row.name}
                       </td>
@@ -213,8 +238,8 @@ export function AttendanceContent() {
                         const cell = row.cells[session.sessionId];
                         const status = cell ? cell.status : null;
                         
-                        let letter = ".";
-                        let colorClass = "text-gray-300";
+                        let letter = "-";
+                        let colorClass = "text-gray-400 font-medium";
                         if (status === "hadir") { letter = "H"; colorClass = "text-green-600 font-bold"; }
                         else if (status === "izin") { letter = "I"; colorClass = "text-yellow-600 font-bold"; }
                         else if (status === "sakit") { letter = "S"; colorClass = "text-blue-600 font-bold"; }

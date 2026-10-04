@@ -66,14 +66,16 @@ class StudentController extends Controller
                 'active' => $validated['active'] ?? true,
             ]);
 
-            // Add history
-            StudentClassHistory::create([
-                'student_id' => $student->id,
-                'class_id' => $student->class_id,
-                'gender' => $student->gender,
-                'effective_from' => now()->toDateString(),
-                'effective_to' => null,
-            ]);
+            if ($student->active) {
+                // Add history
+                StudentClassHistory::create([
+                    'student_id' => $student->id,
+                    'class_id' => $student->class_id,
+                    'gender' => $student->gender,
+                    'effective_from' => now()->toDateString(),
+                    'effective_to' => null,
+                ]);
+            }
 
             DB::commit();
             return response()->json($student, 201);
@@ -105,8 +107,10 @@ class StudentController extends Controller
             DB::beginTransaction();
 
             $classChanged = false;
+            $activeChanged = false;
             $oldClassId = $student->class_id;
             $oldGender = $student->gender;
+            $oldActive = $student->active;
 
             if (isset($validated['classId'])) {
                 $student->class_id = $validated['classId'];
@@ -127,17 +131,51 @@ class StudentController extends Controller
             if ($student->class_id !== $oldClassId || $student->gender !== $oldGender) {
                 $classChanged = true;
             }
+            if ($student->active !== $oldActive) {
+                $activeChanged = true;
+            }
 
             $student->save();
 
-            if ($classChanged) {
-                // Close the old history
+            if ($activeChanged) {
+                if (!$student->active) {
+                    // Deactivated: close active history
+                    $activeHistory = StudentClassHistory::where('student_id', $student->id)
+                        ->whereNull('effective_to')
+                        ->first();
+                    if ($activeHistory) {
+                        $yesterday = now()->subDay()->toDateString();
+                        $activeHistory->effective_to = $yesterday < $activeHistory->effective_from ? $activeHistory->effective_from : $yesterday;
+                        $activeHistory->save();
+                    }
+                } else {
+                    // Reactivated: close any previous open histories and ALWAYS create a new history starting TODAY
+                    $openHistories = StudentClassHistory::where('student_id', $student->id)
+                        ->whereNull('effective_to')
+                        ->get();
+                    $yesterday = now()->subDay()->toDateString();
+                    foreach ($openHistories as $activeHistory) {
+                        $activeHistory->effective_to = $yesterday < $activeHistory->effective_from ? $activeHistory->effective_from : $yesterday;
+                        $activeHistory->save();
+                    }
+
+                    StudentClassHistory::create([
+                        'student_id' => $student->id,
+                        'class_id' => $student->class_id,
+                        'gender' => $student->gender,
+                        'effective_from' => now()->toDateString(),
+                        'effective_to' => null,
+                    ]);
+                }
+            } else if ($classChanged && $student->active) {
+                // Class changed: close old history and open new history
                 $activeHistory = StudentClassHistory::where('student_id', $student->id)
                     ->whereNull('effective_to')
                     ->first();
                 
                 if ($activeHistory) {
-                    $activeHistory->effective_to = now()->subDay()->toDateString();
+                    $yesterday = now()->subDay()->toDateString();
+                    $activeHistory->effective_to = $yesterday < $activeHistory->effective_from ? $activeHistory->effective_from : $yesterday;
                     $activeHistory->save();
                 }
 
@@ -214,13 +252,15 @@ class StudentController extends Controller
                     'active' => $row['active'],
                 ]);
                 
-                StudentClassHistory::create([
-                    'student_id' => $student->id,
-                    'class_id' => $student->class_id,
-                    'gender' => $student->gender,
-                    'effective_from' => now()->toDateString(),
-                    'effective_to' => null,
-                ]);
+                if ($student->active) {
+                    StudentClassHistory::create([
+                        'student_id' => $student->id,
+                        'class_id' => $student->class_id,
+                        'gender' => $student->gender,
+                        'effective_from' => now()->toDateString(),
+                        'effective_to' => null,
+                    ]);
+                }
                 DB::commit();
                 $results[] = ['row' => $rowNum, 'nis' => $nis, 'status' => 'created'];
             } catch (\Exception $e) {

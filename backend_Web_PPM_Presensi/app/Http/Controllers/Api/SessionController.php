@@ -15,7 +15,7 @@ class SessionController extends Controller
         $limit = $request->query('limit', 30);
         $sessions = AttendanceSession::with('sessionGroups.group')
             ->orderBy('session_date', 'desc')
-            ->orderBy('session_type', 'desc')
+            ->orderBy('scan_start_time', 'desc')
             ->limit($limit)
             ->get();
         return response()->json([
