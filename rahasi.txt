@@ -1,6 +1,0 @@
-DB_DATABASE=AbsensiSantri
-DB_USERNAME=ppmrjska
-DB_PASSWORD=RJSKAgacor123	
-
-Username  : adminpresensi
-Password : @RJska26
